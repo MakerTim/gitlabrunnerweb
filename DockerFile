@@ -1,0 +1,6 @@
+FROM gradle:jdk8-alpine
+
+FROM node:latest
+
+FROM gitlab/gitlab-runner:latest
+
