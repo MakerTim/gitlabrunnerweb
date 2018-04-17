@@ -39,7 +39,7 @@ RUN \
         wget https://sonarsource.bintray.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip && \
         mkdir /opt/sonarscanner && \
         unzip -d /opt/sonarscanner sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip
-ENV PATH="${PATH}:/opt/sonarscanner/sonar-scanner-cli-${SONAR_SCANNER_VERSION}/bin"
+ENV PATH="${PATH}:/opt/sonarscanner/sonar-scanner-${SONAR_SCANNER_VERSION}/bin"
 
 
 # Node #
