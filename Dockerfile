@@ -1,64 +1,99 @@
-FROM gitlab/gitlab-runner:latest
+# Commands om de server te installeren #
+Hieronder heb ik mbv sub hoofdstukken alle commands neergezet die ik ook heb uitgevoerd
+Wij zitten op een debian server (Versie Stretch)
+``` 
+NOTE: Dit project werkt met DNS records die specifiek naar 1 ip gaan 
+Pas deze aan, anders grote kans dat delen NIET werken
+makertim.nl is als hoofd DNS altijd gebruikt, voor opzoek refrences
+```
 
-ENV GRADLE_VERSION 3.4.1
-ENV SONAR_SCANNER_VERSION 3.1.0.1141
-
-USER root
-# Installing JAVA #
-
-RUN \
-        echo oracle-java8-installer shared/accepted-oracle-license-v1-1 select true | debconf-set-selections && \
-        apt-get update && \
-        apt-get install -y software-properties-common && \
-        add-apt-repository -y ppa:webupd8team/java && \
-        apt-get update && \
-        apt-get install -y oracle-java8-installer
+## SUDO ##
+apt-get install sudo
 
 
-# Installing tools #
-RUN \
-        apt-get update -y && \
-        apt-get upgrade -y && \
-        apt-get install -y wget unzip && \
-        apt-get clean && \
-        rm -rf /var/lib/apt/lists/*
-RUN mkdir /temp
-WORKDIR /temp
+## DOCKER ##
+sudo apt-get remove docker docker-engine docker.io
+sudo apt-get update
+sudo apt-get install \
+     apt-transport-https \
+     ca-certificates \
+     curl \
+     gnupg2 \
+     software-properties-common
+curl -fsSL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/debian \
+   $(lsb_release -cs) \
+   stable"
+sudo apt-get update
+sudo apt-get install docker-ce
+
+## Nginx router ##
+``` for routing with dns```
+
+docker run -d \
+	-p 80:80 \
+	-v /var/run/docker.sock:/tmp/docker.sock:ro \
+	jwilder/nginx-proxy
 
 
-# Gradle #
-RUN \
-        wget https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip && \
-        mkdir /opt/gradle && \
-        unzip -d /opt/gradle gradle-${GRADLE_VERSION}-bin.zip
-ENV PATH="${PATH}:/opt/gradle/gradle-${GRADLE_VERSION}/bin"
+## Gitlab ##
+docker run -d \
+	--hostname git.ipose.makertim.nl \
+	-e VIRTUAL_HOST=git.ipose.makertim.nl \
+	-p 8080:80 \
+	--name gitlab \
+	--restart always \
+	--volume /srv/gitlab/config:/etc/gitlab \
+	--volume /srv/gitlab/logs:/var/log/gitlab \
+	--volume /srv/gitlab/data:/var/opt/gitlab \
+	gitlab/gitlab-ce:latest
 
 
-# Sonar Scanner #
-RUN \
-        wget https://sonarsource.bintray.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip && \
-        mkdir /opt/sonarscanner && \
-        unzip -d /opt/sonarscanner sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip
-ENV PATH="${PATH}:/opt/sonarscanner/sonar-scanner-${SONAR_SCANNER_VERSION}/bin"
+## Gitlab Runner ##
+docker run -d \
+	--name gitlab-runner \
+	--restart always \
+	-v /srv/gitlab-runner/config:/etc/gitlab-runner \
+	-v /srv/production:/srv/production \
+	-v /var/run/docker.sock:/var/run/docker.sock \
+	makertim/gitlab-runner-node-gradle
 
 
-# Node #
-RUN \
-        curl -sL https://deb.nodesource.com/setup_9.x | sudo -E bash - && \
-        apt-get install -y nodejs
-
-# Yarn #
-RUN \
-        curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - && \
-        echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list && \
-        apt-get update && \
-        sudo apt-get install yarn
+## SonarQube ##
+docker run -d \
+	-e VIRTUAL_HOST=sonarqube.ipose.makertim.nl \
+	-p 9000:9000 \
+	--name SonarQube \
+	--restart always \
+	sonarqube:alpine
 
 
-# cleanup mess #
-WORKDIR /
-RUN \
-        apt-get clean && \
-        rm -rf /var/lib/apt/lists/* && \
-        rm -rf /var/cache/oracle-jdk8-installer && \
-        rm -rf /temp
+## Sonatype Nexus3 ##
+docker run -d \
+	-e VIRTUAL_HOST=nexus.ipose.makertim.nl \
+	-p 8081:8081 \
+	--name nexus \
+	sonatype/nexus3
+
+# CD
+## Create directories for production ##
+mkdir -p -m 777 /srv/production/front
+mkdir -p -m 777 /srv/production/back
+mkdir -p -m 777 /srv/production/compiler
+
+## Frontend ##
+docker run -d \
+	-e VIRTUAL_HOST=front.ipose.makertim.nl \
+	-p 8082:80 \
+	-v /srv/production/front:/usr/local/apache2/htdocs/ \
+	--name frontend \
+	httpd
+
+## Backend ##
+docker run -d \
+	-e VIRTUAL_HOST=back.ipose.makertim.nl \
+	-p 8083:8080 \
+	-v /srv/production/back:/opt/starter/run/ \
+	--name backend \
+	makertim/jarrunner
