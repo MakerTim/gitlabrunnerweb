@@ -19,7 +19,7 @@ RUN \
 RUN \
         apt-get update -y && \
         apt-get upgrade -y && \
-        apt-get install -y wget unzip && \
+        apt-get install -y wget unzip sshpass && \
         apt-get clean && \
         rm -rf /var/lib/apt/lists/*
 RUN mkdir /temp
